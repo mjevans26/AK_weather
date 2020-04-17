@@ -1,0 +1,88 @@
+---
+title: "Weather conditions @ Kaktovik, AK"
+author: "Michael Evans"
+date: "April 17, 2020"
+output:
+  html_document:
+    df_print: paged
+    fig_caption: yes
+    fig_width: 7
+    highlight: tango
+    css: 'www/HTMLAnalysis_custom.css'
+    toc: true
+    toc_depth: 3
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(plotly)
+
+cleandata <- readRDS(file = 'data/cleandata.rds')
+
+# add a boolean 'survey' field indicating suitable survey conditions
+cleandata <- mutate(cleandata, survey = FLIR & !daylight)
+
+```
+
+# FLIR
+
+Forward looking infrared (FLIR) imaging is a tool that can be used to detect polar bear dens underneath snow. To obtain imagery over large areas, aerial surveys are conducted using either helicopters or fixed wing aicraft. Weather conditions determine the suitability of for aerial FLIR surveys. These include wind speeds less than 11 km/hr, a dew point ‐ ambient temp spread of >3.0°C, and no visible moisture(e.g. fog, rain, snow, etc.). Furthermore, surveys less effective and generally not conducted during daylight [Wilson & Durner 2019](https://wildlife.onlinelibrary.wiley.com/doi/full/10.1002/jwmg.21800).
+
+## Suitable survey conditions
+
+To estimate the availability of suitable FLIR survey conditions, We analyzed publicly available NOAA [weather data](https://www.ncdc.noaa.gov/cdo-web/datasets/LCD/stations/WBAN:27401/detail) from Barter Island, AK, and [daylight data](https://www.timeanddate.com/sun/usa/kaktovik). We analyzed all available hourly data from 1997 through April 2020.
+
+```{r timeline, echo = FALSE}
+
+axis <- list(
+  tickfont = list(color = 'black', size = 14),
+  titlefont = list(color ='black', size = 16),
+  showgrid = FALSE
+)
+
+y2 <- append(
+  list(
+    overlaying = "y",
+    side = "right",
+    title = "Observed hours",
+    zeroline = FALSE,
+    range = c(0, 5500)),
+  axis
+)
+
+filter(cleandata, Month == 1|Month == 12, !is.na(survey))%>%
+  group_by(Year)%>%
+  summarize(prop = sum(survey, na.rm = TRUE)/n(),
+            count = n())%>%
+  plot_ly()%>%
+  add_trace(name = 'Suitable (%)',
+            type = 'bar', x = ~Year, y = ~prop,
+            text = ~paste('Suitable hours (%) in', Year, '=', round(prop, 2)),
+            hoverinfo = 'text')%>%
+  add_trace(name = 'Hours',
+            type = 'scatter', mode = 'lines',
+            x = ~Year, y = ~count,
+            yaxis = 'y2')%>%
+  layout(
+    legend = list(x = 0.8, y = 1, yanchor = 'left'),
+    xaxis = append(list(title = 'Year'), axis),
+    yaxis = append(list(title = 'Suitable hours (%)'), axis),
+    yaxis2 = y2,
+    margin = list(t = 0, b = 0, l = 55, r = 55)
+  )
+
+```
+
+## Change over time
+
+Under a changing climate, the conditions suitable for FLIR surveys may be changing over time. A simple logistic regression model indicates that the proportion of suitable hours has decreased between 1997 and 2020. 
+
+```{r pressure, echo=TRUE}
+logModel <- glm(data = filter(cleandata, Month ==1|Month ==12),
+                survey ~ Year, family = binomial(link = 'logit'))
+
+summary(logModel)$coefficients
+
+```
+
